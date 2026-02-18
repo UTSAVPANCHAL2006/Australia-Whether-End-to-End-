@@ -7,7 +7,6 @@ on:
       - master
 
 env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-central1
   SERVICE_NAME: rain-prediction-api
 
@@ -16,28 +15,37 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout repository
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # 2️⃣ Authenticate to Google Cloud
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_CREDENTIALS }}
 
+      # 3️⃣ Setup gcloud SDK
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ env.PROJECT_ID }}
 
-      - name: Configure Docker for GCR
+      # 4️⃣ Export PROJECT_ID from gcloud (🔥 FIX)
+      - name: Set PROJECT_ID
+        run: |
+          echo "PROJECT_ID=$(gcloud config get-value project)" >> $GITHUB_ENV
+
+      # 5️⃣ Configure Docker auth for GCR
+      - name: Configure Docker
         run: |
           gcloud auth configure-docker gcr.io --quiet
 
+      # 6️⃣ Build & push Docker image
       - name: Build and Push Docker Image
         run: |
           docker build -t gcr.io/${PROJECT_ID}/${SERVICE_NAME}:${{ github.sha }} .
           docker push gcr.io/${PROJECT_ID}/${SERVICE_NAME}:${{ github.sha }}
 
+      # 7️⃣ Deploy to Cloud Run
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
         with:
