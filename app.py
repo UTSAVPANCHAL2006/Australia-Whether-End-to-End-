@@ -4,14 +4,16 @@ import joblib
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn
+from contextlib import asynccontextmanager
 
-app = FastAPI(title="Rain Prediction Project")
+# ------------------ PATH SETUP ------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ARTIFACTS_DIR = os.path.join(BASE_DIR, "artifacts")
 
-# Load model
-model = joblib.load("artifacts/model.pkl")
-
-# Load encoders
+# ------------------ GLOBALS ------------------
+model = None
 encoders = {}
+
 encoder_cols = [
     "Location",
     "WindGustDir",
@@ -20,13 +22,37 @@ encoder_cols = [
     "RainToday"
 ]
 
-for col in encoder_cols:
-    encoders[col] = joblib.load(f"artifacts/encoders/{col}.pkl")
+# ------------------ LIFESPAN (startup) ------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global model, encoders
 
-encoders["RainTomorrow"] = joblib.load(
-    "artifacts/encoders/RainTomorrow.pkl"
+    # Load model
+    model = joblib.load(
+        os.path.join(ARTIFACTS_DIR, "model", "model.pkl")
+    )
+
+    # Load encoders
+    for col in encoder_cols:
+        encoders[col] = joblib.load(
+            os.path.join(ARTIFACTS_DIR, "encoders", f"{col}.pkl")
+        )
+
+    encoders["RainTomorrow"] = joblib.load(
+        os.path.join(ARTIFACTS_DIR, "encoders", "RainTomorrow.pkl")
+    )
+
+    print("✅ Model and encoders loaded successfully")
+    yield
+    print("🛑 App shutdown")
+
+# ------------------ FASTAPI APP ------------------
+app = FastAPI(
+    title="Rain Prediction Project",
+    lifespan=lifespan
 )
 
+# ------------------ SCHEMA ------------------
 class WeatherInput(BaseModel):
     Date: str
     Location: str
@@ -51,6 +77,7 @@ class WeatherInput(BaseModel):
     Temp3pm: float
     RainToday: str
 
+# ------------------ ROUTES ------------------
 @app.get("/")
 def home():
     return {"message": "Rain Prediction API is running"}
@@ -83,6 +110,7 @@ def predict(data: WeatherInput):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ------------------ ENTRYPOINT ------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run("app:app", host="0.0.0.0", port=port)
