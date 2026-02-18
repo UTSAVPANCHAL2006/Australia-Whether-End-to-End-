@@ -7,10 +7,10 @@ import uvicorn
 
 app = FastAPI(title="Rain Prediction Project")
 
-
+# Load model
 model = joblib.load("artifacts/model.pkl")
 
-
+# Load encoders
 encoders = {}
 encoder_cols = [
     "Location",
@@ -26,7 +26,6 @@ for col in encoder_cols:
 encoders["RainTomorrow"] = joblib.load(
     "artifacts/encoders/RainTomorrow.pkl"
 )
-
 
 class WeatherInput(BaseModel):
     Date: str
@@ -52,17 +51,18 @@ class WeatherInput(BaseModel):
     Temp3pm: float
     RainToday: str
 
-
 @app.get("/")
 def home():
-    return {"message": "API is working"}
+    return {"message": "Rain Prediction API is running"}
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 @app.post("/predict")
 def predict(data: WeatherInput):
     try:
         df = pd.DataFrame([data.dict()])
-
 
         df["Date"] = pd.to_datetime(df["Date"])
         df["Year"] = df["Date"].dt.year
@@ -73,19 +73,16 @@ def predict(data: WeatherInput):
         for col in encoder_cols:
             df[col] = encoders[col].transform(df[col].astype(str))
 
-    
         df = df.fillna(0)
 
-
         pred = model.predict(df)
-
         result = encoders["RainTomorrow"].inverse_transform(pred)
 
         return {"RainTomorrow": result[0]}
 
-    except:
-        raise HTTPException(status_code=500, detail="Error during prediction")
-
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run("app:app", host="0.0.0.0", port=port)
