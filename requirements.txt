@@ -1,0 +1,12 @@
+numpy
+pandas
+matplotlib
+seaborn
+scikit-learn
+google-cloud-storage
+xgboost
+joblib
+mlflow
+fastapi
+uvicorn
+
